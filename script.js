@@ -1,19 +1,38 @@
 ﻿let classListName;
 let listOfClassLists;
+
 let names;
 let checkboxes;
+let pinboxes;
+
 let grouping;
 let groupingName;
 let saved;
 
+let pinned;
+let first;
+let startIndices;
+let pinIndices;
+
+let max;
+
+// Basic pin feature is working, but I need to save it to class list and change UI for it
+
 /*
 Event handler function, called when the page initially loads. Retrieves any previously uploaded class lists from
-localStorage, then builds the drop-down menu based on the user's lists (with option to upload a new list).
+localStorage, then builds the drop-down menu based on the user's lists (with option to upload a list).
 */
 function onLoad() {
 	
 	names = [];
 	checkboxes = [];
+	pinboxes = [];
+	pinned = [];
+	startIndices = [];
+	pinIndices = [];
+	
+	first = true;
+	max = true;
 	
 	buildListOfClassLists();
 	
@@ -40,6 +59,7 @@ function buildListOfClassLists() {
 		if (thisList == null) {
 			break;
 		}
+		
 		let thisListFormattedRight = [];
 		
 		let name = "";
@@ -192,7 +212,7 @@ function parseFile(file, buildingList) {
 			spaceIndex = formattedName.indexOf(' ') + 1;
 			
 			formattedName = formattedName.charAt(0) + formattedName.slice(1, spaceIndex).toLowerCase()
-				+ formattedName.charAt(spaceIndex) + formattedName.substring(spaceIndex + 1).toLowerCase();
+				+ formattedName.charAt(spaceIndex) + formattedName.substring(spaceIndex + 1).toLowerCase() + "0";
 			
 			names.push(formattedName);
 			if (buildingList) {
@@ -242,10 +262,48 @@ function addListElement(name) {
 	checkbox.style = "float: right; margin-right: 30px; margin-top: 6px; background: red;"
 	checkboxes.push(checkbox);
 	
-	listItem.appendChild(document.createTextNode(name));
-	listItem.appendChild(checkbox)
+	let pinbox = document.createElement("input");
+	
+	pinbox.type = "checkbox";
+	
+	if (name.charAt(name.length - 1) != '1')
+	{
+		pinbox.checked = "true";
+	}
+	
+	pinbox.style = "float: right; margin-right: 30px; margin-top: 6px; background: red;"
+	pinboxes.push(pinbox);
+	
+	if (name.length > 20) {
+		listItem.appendChild(document.createTextNode(name.substring(0, 17) + "..."));
+	}
+	else {
+		listItem.appendChild(document.createTextNode(name.substring(0, name.length - 1)));
+	}
+	
+	listItem.appendChild(pinbox);
+	listItem.appendChild(checkbox);
 	
 	list.appendChild(listItem);
+}
+
+/*
+Event handler function which toggles whether or not there is a cap on the number of groups generated.
+*/
+function maxToggle()
+{
+	if (document.getElementById("noMax").checked)
+	{
+		document.getElementById("maxGroups").style = "display: inline-block; width: 40px;";
+		document.getElementById("none").style = "display: none";
+		max = true;
+	}
+	else
+	{
+		document.getElementById("maxGroups").style = "display: none;";
+		document.getElementById("none").style = "display: inline-block";
+		max = false;
+	}
 }
 
 /*
@@ -254,12 +312,11 @@ the grouping algorithm, and updates the HTML display.
 */
 function generateGroups() {
 	let groupSize = parseInt(document.getElementById("groupSize").value);
+	let maxGroups = parseInt(document.getElementById("maxGroups").value);
 	groupingName = document.getElementById("groupingName").value;
-	
 	if (groupSize > 0) {
-		
-		removeAbsent();
-		shuffleNameList();
+		removeAbsent(groupSize, maxGroups);
+		shuffleNameList(groupSize);
 		
 		grouping = makeGroups(groupSize);
 		
@@ -274,27 +331,127 @@ function generateGroups() {
 
 /*
 Helper function called by the generateGroups() function to remove any students with unchecked boxes, so they will
-not be considered in the final grouping. 
+not be considered in the final grouping. It also calculates starting indices for the groups.
 */
-function removeAbsent() {
+function removeAbsent(groupSize, maxGroups) {
 	let j = 0;
+
 	for (let i = 0; i < checkboxes.length; i++) {
 		if (checkboxes[i].checked === false) {
 			checkboxes[i].checked = true;
 			names.splice(j, 1);
-			j -= 1;
+			j--;
+		}
+		else if (pinboxes[i].checked === false) {
+			pinboxes[i].checked = true;
+			pinned.push(names[j]);
+			names.splice(j, 1);
+			j--;
 		}
 		j++;
+	}
+	
+	if (first)
+	{
+		let remainder = 0;
+		let cutoff;
+		
+		if (max)
+		{
+			cutoff = maxGroups * groupSize;
+			remainder = names.length + pinned.length - cutoff;
+		}
+		
+		if (remainder < 1)
+		{
+			for (let i = 0; i < names.length + pinned.length; i += groupSize)
+			{
+				startIndices.push(i);
+				if (!((i + (2 * groupSize) - 1 < names.length + pinned.length) || i + groupSize === names.length + pinned.length)) 
+				{			
+					let arrLen = names.length + pinned.length - i;
+					
+					if(groupSize != 2) 
+					{
+						startIndices.push(parseInt(i + (arrLen / 2)));
+					}
+					
+					break;
+				}
+			}	
+		}
+		else
+		{
+			let cutoffIndex = cutoff;
+			for (let i = 0; i < remainder; i++)
+			{
+				cutoffIndex -= groupSize;
+				if (cutoffIndex <= 0)
+				{
+					groupSize++;
+					cutoffIndex = groupSize * maxGroups;
+				}
+			}
+			for (let i = 0; i < names.length + pinned.length; i += groupSize)
+			{
+				startIndices.push(i);
+				
+				if (i === cutoffIndex)
+				{
+					groupSize++;
+				}
+			}
+		}
 	}
 }
 
 /*
 Helper function called by the generateGroups() function to shuffle the list of student names.
 */
-function shuffleNameList() {
-	for (let i = 0; i < (names.length - 1); i++) {
-		let randomIndex = i + Math.floor(Math.random() * (names.length - i));
-		[names[i], names[randomIndex]] = [names[randomIndex], names[i]];
+function shuffleNameList(groupSize) {
+	let pinIndex = 0;
+	
+	if (first)
+	{
+		for (let i = 0; i < names.length - 1; i++)
+		{
+			let randomIndex = i + Math.floor(Math.random() * (names.length - i));
+			[names[i], names[randomIndex]] = [names[randomIndex], names[i]];
+		}
+		
+		let j = 0;
+		let wrap = 0;
+		
+		for (let i = 0; i < pinned.length; i++)
+		{
+			names.splice(startIndices[j + wrap], 0, pinned[i]);
+			j++;
+			if (j >= startIndices.length)
+			{
+				j = 0;
+				wrap++;
+			}
+		}
+		first = false;
+	}
+	else
+	{
+		for (let i = 0; i < names.length - 1; i++)
+		{
+			if (pinned.includes(names[i]))
+			{
+				continue;
+			}
+			
+			let randomIndex;
+			do
+			{
+				randomIndex = i + Math.floor(Math.random() * (names.length - i));
+			}
+			while(pinned.includes(names[randomIndex]));
+
+			[names[i], names[randomIndex]] = [names[randomIndex], names[i]];
+		}
 	}
 }
 
@@ -304,26 +461,22 @@ Helper function called by the generateGroups() function which does the actual gr
 function makeGroups(groupSize) {
 	let groups = [];
 	
-	for (let i = 0; i < names.length; i += groupSize) {
-		if ((i + (2 * groupSize) - 1 < names.length) || i + groupSize === names.length) {
-			let arr = names.slice(i, i + groupSize);
-			groups.push(arr);
-		} else {
-			let arr = names.slice(i, names.length);
-			
-			if(groupSize === 2) {
-				groups.push(arr);
-			} else {
-				let arr1 = arr.slice(0, arr.length / 2);
-				let arr2 = arr.slice(arr.length / 2, arr.length);
-				
-				groups.push(arr2);
-				groups.push(arr1);
-			}
-			
-			break;
+	for (let i = 0; i < startIndices.length; i++)
+	{
+		let start = startIndices[i];
+		let end;
+		if (i + 1 < startIndices.length)
+		{
+			end = startIndices[i + 1];
 		}
+		else
+		{
+			end = names.length;
+		}
+		
+		groups.push(names.slice(start, end));
 	}
+	
 	return groups;
 }
 
@@ -347,7 +500,7 @@ function buildGroupView() {
 		
 		for (let name of grouping[i]) {
 			let li = document.createElement("li");
-			li.appendChild(document.createTextNode(name));
+			li.appendChild(document.createTextNode(name.substring(0, name.length - 1)));
 			ul.appendChild(li);
 		}
 		
@@ -445,9 +598,15 @@ function buildClassListView() {
 	let index = 0;
 	for (let className of listOfClassLists.keys()) {
 		let li = document.createElement("li");
-		li.style = "height: 30px; overflow: hidden;";
-		if (className.length > 15) {
-			let trimmed = className.slice(0, 12) + "...";
+		li.style = "height: 30px; overflow: hidden;"
+		
+		let number = document.createElement("p");
+		number.innerHTML = parseInt(index + 1);
+		number.style = "margin-left: 20px; float: left;"
+		li.appendChild(number);
+		
+		if (className.length > 28) {
+			let trimmed = className.slice(0, 25) + "...";
 			li.appendChild(document.createTextNode(trimmed));
 		} else {
 			li.appendChild(document.createTextNode(className));
@@ -569,12 +728,19 @@ function buildStudentListView(className, classList, thisIndex) {
 	let index = 0;
 	for (let student of classList) {
 		let li = document.createElement("li");
-		li.style = "height: 30px;";
-		if (student.length > 20) {
-			let trimmed = student.slice(0, 17) + "...";
+		li.style = "height: 30px; overflow: hidden;";
+		
+		let number = document.createElement("p");
+		number.innerHTML = parseInt(index + 1);
+		number.style = "margin-left: 20px; float: left;"
+		li.appendChild(number);
+		
+		let displayName = student.substring(0, student.length - 1);
+		if (displayName.length > 28) {
+			let trimmed = displayName.slice(0, 25) + "...";
 			li.appendChild(document.createTextNode(trimmed));
 		} else {
-			li.appendChild(document.createTextNode(student));
+			li.appendChild(document.createTextNode(displayName));
 		}
 
 		let removeButton = document.createElement("input");
@@ -583,7 +749,7 @@ function buildStudentListView(className, classList, thisIndex) {
 		removeButton.type = "button";
 		removeButton.value = "Remove";
 		removeButton.onclick = function() { removeStudent(student, thisIndex, className, classList, thisIndex) };
-		removeButton.style = "color: blue;  font-weight: bold; background: transparent; border: none; float: right; margin-right: 30px;";
+		removeButton.style = "color: blue;  font-weight: bold; background: transparent; border: none; float: right; margin-right: 5px;";
 	
 		let renameButton = document.createElement("input");
 		
@@ -592,6 +758,20 @@ function buildStudentListView(className, classList, thisIndex) {
 		renameButton.onclick = function() { renameStudent(student, thisIndex, className, classList, thisIndex) };
 		renameButton.style = "color: blue;  font-weight: bold; background: transparent; border: none; float: right; margin-right: 5px;";
 		
+		let pinButton = document.createElement("input");
+		
+		pinButton.type = "button";
+		if (student.charAt(student.length - 1) === '0') {
+			pinButton.value = "Pin";
+			pinButton.style = "color: blue;  font-weight: bold; background: transparent; border: none; float: right; margin-right: 40px;";
+		}
+		else {
+			pinButton.value = "Unpin";
+			pinButton.style = "color: blue;  font-weight: bold; background: transparent; border: none; float: right; margin-right: 17px;";
+		}
+		pinButton.onclick = function() { pinStudent(student, thisIndex, className, classList, thisIndex) };
+		
+		li.appendChild(pinButton);
 		li.appendChild(removeButton);
 		li.appendChild(renameButton);
 		list.appendChild(li);
@@ -614,6 +794,7 @@ Event handler function which allows the user to add a new student to the class b
 function newStudent(className, classList, classIndex) {
 	let newStudentName = prompt("Enter this student's name");
 	if (!(newStudentName == null || newStudentName == "")) {
+		newStudentName += "0";
 		classList.push(newStudentName);
 		
 		listOfClassLists.set(className, classList);
@@ -625,12 +806,19 @@ function newStudent(className, classList, classIndex) {
 		
 		let list = document.getElementById("listOfClasses");
 		let li = document.createElement("li");
-		li.style = "height: 30px;";
-		if (newStudentName.length > 20) {
-			let trimmed = newStudentName.slice(0, 17) + "...";
+		li.style = "height: 30px; overflow: hidden;";
+		
+		let number = document.createElement("p");
+		number.innerHTML = parseInt(classList.length);
+		number.style = "margin-left: 20px; float: left;"
+		li.appendChild(number);
+		
+		let displayName = newStudentName.substring(0, newStudentName.length - 1);
+		if (displayName.length > 28) {
+			let trimmed = displayName.slice(0, 25) + "...";
 			li.appendChild(document.createTextNode(trimmed));
 		} else {
-			li.appendChild(document.createTextNode(newStudentName));
+			li.appendChild(document.createTextNode(displayName));
 		}
 		
 		let removeButton = document.createElement("input");
@@ -638,8 +826,8 @@ function newStudent(className, classList, classIndex) {
 		removeButton.type = "button";
 		removeButton.value = "Remove";
 		removeButton.onclick = function() { removeStudent(newStudentName, classList.length - 1, className, classList, classIndex) };
-		removeButton.style = "color: blue;  font-weight: bold; background: transparent; border: none; float: right; margin-right: 30px;";
-		
+		removeButton.style = "color: blue;  font-weight: bold; background: transparent; border: none; float: right; margin-right: 5px;";
+
 		let renameButton = document.createElement("input");
 		
 		renameButton.type = "button";
@@ -647,18 +835,46 @@ function newStudent(className, classList, classIndex) {
 		renameButton.onclick = function() { renameStudent(newStudentName, classList.length - 1, className, classList, classIndex) };
 		renameButton.style = "color: blue;  font-weight: bold; background: transparent; border: none; float: right; margin-right: 5px;";
 		
+		let pinButton = document.createElement("input");
 		
+		pinButton.type = "button";
+		if (newStudentName.charAt(newStudentName.length - 1) === '0') {
+			pinButton.value = "Pin";
+			pinButton.style = "color: blue;  font-weight: bold; background: transparent; border: none; float: right; margin-right: 40px;";
+		}
+		else {
+			pinButton.value = "Unpin";
+			pinButton.style = "color: blue;  font-weight: bold; background: transparent; border: none; float: right; margin-right: 17px;";
+		}
+		pinButton.onclick = function() { pinStudent(newStudentName, classList.length - 1, className, classList, thisIndex) };
+		
+		li.appendChild(pinButton);
 		li.appendChild(removeButton);
 		li.appendChild(renameButton);
-		list.appendChild(li);	
+		list.appendChild(li);
+		
 	}
+}
+
+/*
+Event handler functionn which allows the user to permanently toggle a student's default pinned setting.
+*/
+function pinStudent(student, thisIndex, className, classList, classIndex) {
+	if (student.charAt(student.length - 1) === '0') {
+		student = student.replace('0', '1');
+	}
+	else {
+		student = student.replace('1', '0');
+	}
+	classList[thisIndex] = student;
+	updateChangedClassList(className, classList, classIndex);
 }
 
 /*
 Event handler function which allows the user to remove a student from the class being edited.
 */
 function removeStudent(student, thisIndex, className, classList, classIndex) {
-	if (confirm(`Remove ${student} from ${className}?`)) {
+	if (confirm(`Remove ${student.substring(0, student.length - 1)} from ${className}?`)) {
 		classList.splice(thisIndex, 1);
 		updateChangedClassList(className, classList, classIndex);
 	}
@@ -668,14 +884,17 @@ function removeStudent(student, thisIndex, className, classList, classIndex) {
 Event handler function which allows the user to rename a student in the class being edited.
 */
 function renameStudent(student, thisIndex, className, classList, classIndex) {
-	let newName = prompt(`Enter the new name for ${student}`, student);
+	let student1 = student.substring(0, student.length - 1);
+	let student2 = student.substring(student.length - 1);
 	
-	if (newName == student) {
+	let newName = prompt(`Enter the new name for ${student1}`, student1);
+	
+	if (newName == student1) {
 		return;
 	}
 	
 	if (!(newName == null || newName == "")) {
-		classList[thisIndex] = newName;
+		classList[thisIndex] = newName + student2;
 	}
 	updateChangedClassList(className, classList, classIndex);
 }
@@ -804,13 +1023,16 @@ function showConfigurationMenu() {
 	document.getElementById("dropDownLabel").style.display = "none";
 	document.getElementById("dropDown").style.display = "none";
 	document.getElementById("dropDownSubmit").style.display = "none";
-	document.getElementById("mainDescription").innerHTML = `It\'s time to create teams for ${classListName}! First, deselect any students who aren't here today.<br> Then choose the size of each team, and pick a name for these teams.`;
-	document.getElementById("mainHeader").innerHTML = "Generate Teams";
+	document.getElementById("mainDescription").innerHTML = `Deselect the first check box for anyone who isn't here today.<br>Deselect the second check box for anyone you'd like pinned to the same group every time.<br><br>Finally, choose the size of each team, and pick a name for these teams.`;
+	document.getElementById("mainHeader").innerHTML = `Generate Teams For ${classListName}`;
 	document.getElementById("groupingName").value = `${classListName} Teams`;
 
 	document.getElementById("studentList").style.display = "inline-block";
 	document.getElementById("sizeLabel").style.display = "inline-block";
 	document.getElementById("groupSize").style.display = "inline-block";
+	document.getElementById("maxLabel").style.display = "inline-block";
+	document.getElementById("maxGroups").style.display = "inline-block";
+	document.getElementById("noMax").style.display = "inline-block";
 	document.getElementById("nameLabel").style.display = "inline-block";
 	document.getElementById("groupingName").style.display = "inline-block";
 	document.getElementById("generateButton").style.display = "inline-block";
@@ -824,6 +1046,8 @@ function showConfigurationMenu() {
 	document.getElementById("b8").style.display = "inline-block";
 	document.getElementById("b9").style.display = "inline-block";
 	document.getElementById("b10").style.display = "inline-block";
+	document.getElementById("b100").style.display = "inline-block";
+	document.getElementById("b101").style.display = "inline-block";
 
 	document.getElementById("or").style.display = "none";
 	document.getElementById("editClasses").style.display = "none";
@@ -855,6 +1079,10 @@ function showViewMenu() {
 	document.getElementById("studentList").style.display = "none";
 	document.getElementById("sizeLabel").style.display = "none";
 	document.getElementById("groupSize").style.display = "none";
+	document.getElementById("maxLabel").style.display = "none";
+	document.getElementById("maxGroups").style.display = "none";
+	document.getElementById("noMax").style.display = "none";
+	document.getElementById("none").style.display = "none";
 	document.getElementById("nameLabel").style.display = "none";
 	document.getElementById("groupingName").style.display = "none";
 	document.getElementById("generateButton").style.display = "none";
@@ -868,6 +1096,8 @@ function showViewMenu() {
 	document.getElementById("b8").style.display = "none";
 	document.getElementById("b9").style.display = "none";
 	document.getElementById("b10").style.display = "none";
+	document.getElementById("b100").style.display = "none";
+	document.getElementById("b101").style.display = "none";
 	document.getElementById("mainHeader").innerHTML = groupingName;
 	document.getElementById("mainDescription").innerHTML = "";
 	
@@ -898,6 +1128,7 @@ function showEditClassMenu(firstTime) {
 		document.getElementById("renameListButton").style.display = "none";
 		document.getElementById("deleteListButton").style.display = "none";
 		document.getElementById("sortListButton").style.display = "none";
+		document.getElementById("pinInfoPinfoIfYouWill").style.display = "none";
 		document.getElementById("b26").style.display = "none";
 	}
 	document.getElementById("mainHeader").innerHTML = "Your classes";
@@ -942,6 +1173,7 @@ function showStudentListMenu(className) {
 	document.getElementById("newClassCancel").style.display = "none";
 	document.getElementById("newClassFromScratch").style.display = "none";
 	document.getElementById("newClassFromFile").style.display = "none";
+	document.getElementById("pinInfoPinfoIfYouWill").style.display = "block";
 	document.getElementById("newStudentButton").style.display = "inline-block";
 	document.getElementById("renameListButton").style.display = "inline-block";
 	document.getElementById("deleteListButton").style.display = "inline-block";

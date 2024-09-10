@@ -73,6 +73,12 @@
 				<input type="number" id="groupSize" min="1" value="3" style="display: none; width: 40px;">
 				<br id="b3" style="display: none">
 				<br id="b4" style="display: none">
+				<input type="checkbox" id="noMax" checked="true" onclick="maxToggle()" style="display: none; width: 40px;">
+				<label for="maxGroups" id="maxLabel" style="display: none;">Max groups:&nbsp;</label>
+				<input type="number" id="maxGroups" min="1" value="10" style="display: none; width: 40px;">
+				<label for="noMax" id="none" style="display: none; margin-right: 1px;">&nbsp;None</label>
+				<br id="b100" style="display: none">
+				<br id="b101" style="display: none">
 				<label for="groupingName" id="nameLabel" style="display: none">Name this grouping:&nbsp;</label>
 				<input type="text" id="groupingName" style="display: none; width: 140px">
 
@@ -107,7 +113,7 @@
 				<input type="button" id="deleteListButton" value="Delete class" style="display: none;">
 				<input type="button" id="sortListButton" value="Sort class A-Z" style="display: none;">
 				<br id="b26" style="display: none;">
-				<ul id="listOfClasses" style="display: none; width: 400px; height: fit-content;">
+				<ul id="listOfClasses" style="display: none; width: 600px; height: fit-content;">
 				</ul>
 				<br id="b20" style="display: none;">
 				<input type="button" id="newClassButton" class="btn btn-primary btn-lg" value="Create new class" style="background: purple; display: none;" onclick="showNewClassOptions()">
@@ -115,6 +121,7 @@
 				<input type="button" id="newClassFromScratch" class="btn btn-primary btn-lg" value="From scratch" style="background: purple; display: none;" onclick="newClassFromScratch()">
 				<input type="button" id="newClassFromFile" class="btn btn-primary btn-lg" value="From file (.csv)" style="background: purple; display: none;" onclick="newClassFromFile()">
 				<!--- Split between buttons for the class list menu, and buttons for the student list menu --->
+				<p id="pinInfoPinfoIfYouWill" style="display: none;">(Pinned students will be assigned to the same group every time)</p>
 				<input type="button" id="newStudentButton" class="btn btn-primary btn-lg" value="Add new student" style="background: purple; display: none;">
 				<br id="b18" style="display: none;">
 				<br id="b19" style="display: none;">
